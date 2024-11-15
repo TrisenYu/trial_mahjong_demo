@@ -3,6 +3,7 @@
 /* 实现最基础的胡牌分。 */
 // 88 番
 /*
+    有点繁琐过头了。
     大四喜：东东东(东) 南南南(南) 西西西(西) 北北北(北) pp
     大三元：中中中(中) 发发发(发) 白白白(白) abc pp
     绿一色：23468 发 中的任何牌构成的胡牌
@@ -21,8 +22,41 @@
     十三幺
     四杠
 */
-static int _88_() {
-    return 88;
+inline int basic_check(
+    unsigned char arr[ESSENTIAL_CARDS_TYPES],
+    unsigned char cnts[6]) {
+    /// 保证牌的数量处在 [14, 18] 之内。
+    /* arr: 个数桶; ref: 只要求值为1，能区分出花色; func：宏或者函数。 */
+    for (int i = _1_WAN_; i <= BAI_BAN; i++) {
+        if (arr[i] >= 5) { return -1; }
+        cnts[5] += arr[i], cnts[arr[i]]++;
+    }
+    if (cnts[5] > 18 || cnts[5] < 14) { return 0; }
+    return 1;
+}
+
+inline int _88_(
+    unsigned char arr[ESSENTIAL_CARDS_TYPES],
+    unsigned char cnt[6]) {
+    /// 保证牌的数量处在 [14, 18] 之内。
+    /* arr: 个数桶; ref: 只要求值为1，能区分出花色; func：宏或者函数。 */
+    if (!basic_check(arr, cnt)) { return 0; }
+    if (cnt[5] == 14) {
+        // 十三幺检测。
+        if (_13_orphans_checker(arr, cnt)) { return 88; }
+        // 检查连七对。
+        unsigned char flag = _7_pairs_or_4_quadruplet(arr, cnt);
+        if (flag) {
+            // 11 22 33 44 55 66 77
+        }
+        // 检查九莲宝灯。
+        return 0;
+    }
+
+    // 检查连七对
+    if (!cnt[1] || !cnt[3]) {}
+
+    return 0;
 }
 // 64 番
 /*
@@ -45,6 +79,13 @@ static int _88_() {
     三杠
     混幺九 111 999 南南南 北北 111
 */
+static int _32_(
+    unsigned char arr[ESSENTIAL_CARDS_TYPES],
+    unsigned char cnt[6]) {
+    if (!basic_check(arr, cnt)) { return 0; }
+    if (cnt[4] == 3) { return 0 /* TODO */; }
+    return 0;
+}
 
 // 24 番
 /*
@@ -69,11 +110,104 @@ static int _88_() {
     三暗刻：门前清可能。
 */
 
+/// TODO: 感觉还需要附上说明.
 // 12 番
 /*
     全不靠：字牌没满，
     大于5 6789 组成的和牌
     小于5 1234 组成的和牌
     三风刻 要有三个风刻（杠）
-    
+*/
+static inline int _12_(
+    unsigned char arr[ESSENTIAL_CARDS_TYPES],
+    unsigned char cnt[6]) {
+#define greater_than_3(val) ((val) >= 3)
+#define test_wind(ptr)                                                         \
+    do {                                                                       \
+        int __cnt = 0;                                                         \
+        for (int __i = DONG_FENG; __i < HONG_ZHONG; __i++) {                   \
+            __cnt += greater_than_3(arr[__i]);                                 \
+        }                                                                      \
+        *ptr = __cnt == 3;                                                     \
+    } while (0)
+
+    if (all_alone(arr, cnt)) {
+        int counter = 0;
+        for (int i = DONG_FENG; i <= BAI_BAN; i++) { counter += arr[i]; }
+        if (counter == 7) { return 24; }
+        return 12;
+    }
+
+    unsigned char flag = 0, glaf = 0;
+    test_wind(&flag);
+    if (arr[_5_WAN_] || arr[_5_TIAO] || arr[_5_TONG]) {
+        if (!flag) { return 0; }
+        goto end;
+    }
+    flag = 0;
+    for (int k = _1_WAN_; k < DONG_FENG; k += SUIT_LEAP) {
+        for (int i = 0, j = 6; i < 5; i++, j++) {
+            if ((arr[i + k] && glaf) || (arr[j + k] && flag)) { return 0; }
+            if (arr[i + k]) { flag = 1; }
+            if (arr[j + k]) { glaf = 1; }
+        }
+    }
+end:
+    return /* todo */ 0;
+}
+
+// 8 番
+/*
+    花龙 123 456 789 在不同的花色。
+    推不倒：把胡的所有牌逐个倒过来看还是一样的牌。分布：筒：1234589 条：245689
+   外加白板。
+    杠上开花：自己杠后摸到牌胡
+    海底捞月：最后一轮，别人打出一张牌然后胡
+    妙手回春：摸到牌堆最后一张牌胡
+    抢杠和：别人要杠但自己胡
+
+ */
+// 6 番
+/*
+    碰碰和
+    混一色
+    三色三步高
+    五门齐
+    全求人
+    双暗杠 / 一明一暗
+    双键刻
+*/
+
+// 4 番
+/*
+    全带幺： 每个花色都带 1或9
+    门前清（不求人）
+    双明杠：
+    和绝张：当某个花色在整个牌局中只剩下最后一张且从[牌堆/他人]手上[取出/打出]造成胡牌时，就是和绝张。
+*/
+
+// 2 番
+/*
+    箭/门风/
+    平和 四幅顺子造成和牌
+    四归一
+    断幺
+    单暗杠
+    双同刻
+    双暗刻
+*/
+
+// 1 番
+/*
+    喜相逢：两幅不同花色值一样的顺子。
+    连六： 234567 花色内构成的连续两个顺子。
+    老少副：123 789 花色内同时存在.
+    缺一门：少一类牌。
+    无字：胡牌中没有风箭
+    边张：123或者789 某个具体的花色内只有两者中的一个。
+    坎张：靠听顺子中间的牌来胡。
+    单钓将：只用 1 张牌来听胡而成的胡牌。
+    自摸
+    花牌。
+    一般高：花色相同的两个顺子。
 */

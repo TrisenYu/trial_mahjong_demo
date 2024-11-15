@@ -1,7 +1,6 @@
-res = 1
-quotient = 1
-for i in range(1, 15):
-    res = res * (36 - i)
-    quotient *= i
-print(res / quotient)
-# 好像算不对。理论来说应该是 三千多亿。
+res, cnt = 1, 136
+curr = 1
+for i in range(0, 14):
+    res *= (cnt-i)
+    curr *= i+1
+print(int(res/curr))

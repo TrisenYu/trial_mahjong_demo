@@ -1,0 +1,70 @@
+# 至少需要 14.0.0 之后的 clang-format
+BasedOnStyle: Google
+Language: Cpp
+IndentWidth: 4
+ColumnLimit: 80
+# public, private, protected 顶格。
+AccessModifierOffset: -4
+BreakBeforeBraces: Attach
+
+# ----------- 对齐 -------------
+AlignConsecutiveAssignments: true
+#! If true, horizontally aligns arguments after an open bracket.
+AlignAfterOpenBracket: AlwaysBreak
+# 开括号(开圆括号、开尖括号、开方括号)后的对齐: Align, DontAlign, AlwaysBreak(总是在开括号后换行)
+# 对齐注释
+IndentCaseLabels: false
+# 断行继承列表
+BreakInheritanceList: AfterColon
+# ----------- 允许 -------------
+# 允许将短函数放在一行
+AllowShortFunctionsOnASingleLine: All
+AllowShortLoopsOnASingleLine: true
+# 允许函数声明的所有参数在放在下一行
+# false 才是想要的。
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortIfStatementsOnASingleLine: true
+# 短的 case 标签放在同一行。
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+# 短的循环放在同一行
+# 即使BinPackParameters是假的，也允许将一个函数声明的所有参数移到下一行.
+# ------------ 杂项 -------------
+ExperimentalAutoDetectBinPacking: true
+IndentGotoLabels: false
+SpaceInEmptyParentheses: false
+  
+# 宏对齐
+AlignConsecutiveMacros: true
+# 对齐连续的尾随的注释
+AlignTrailingComments:	true
+# 连续空行的最大数量
+MaxEmptyLinesToKeep: 1
+AlignEscapedNewlines: Right
+BraceWrapping:
+  AfterCaseLabel:  false
+  AfterClass:      false
+  AfterControlStatement: false
+  AfterEnum:       false
+  AfterFunction:   true
+  AfterNamespace:  false
+  AfterObjCDeclaration: false
+  AfterStruct:     false
+  AfterUnion:      false
+  AfterExternBlock: false
+  BeforeCatch:     false
+  BeforeElse:      false
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+BinPackArguments: false
+BinPackParameters: true
+AlwaysBreakAfterReturnType: None
+PenaltyBreakBeforeFirstCallParameter: 1
+
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: -1
+ReflowComments: false
+AlwaysBreakTemplateDeclarations: No
