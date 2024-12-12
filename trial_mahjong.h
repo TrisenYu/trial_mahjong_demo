@@ -1,7 +1,6 @@
 #ifndef _TRIAL_MAHJONG_H_
 #define _TRIAL_MAHJONG_H_
 #endif
-
 /**
  * SPDX-LICENSE-IDENTIFIER: GPL2.0-ONLY
  * (C) 2024 Author: <kisfg@hotmail.com>
@@ -18,6 +17,9 @@
  *this program. If not, see <https://www.gnu.org/licenses/>.
  *
  **/
+#include <fstream>
+
+#include "mahjong_const.h"
 
 /// @brief (val >> i) & mask;
 /// @param val
@@ -76,7 +78,7 @@ constexpr unsigned char _ofs_[] = {
     0x1c,
     0x20
 };
-constexpr unsigned long long pair_masks[9] = {
+constexpr unsigned long long pair_mask[9] = {
     0x0'000'000'002,  // #define _11_
     0x0'000'000'020,  // #define _22_
     0x0'000'000'200,  // #define _33_
@@ -125,39 +127,93 @@ constexpr unsigned long long _sp_mask[3] = {
 
 static unsigned char is_pair(unsigned long long val) {
     for (int i = 0; i < 9; i++) {
-        if (val == pair_masks[i]) { return 1; }
+        if (val == pair_mask[i]) { return 1; }
     }
     return 0;
 }
 
 class trial_mahjongs_in_hand {
 public:
-    unsigned long long w;  // wan
-    unsigned long long t;  // tiao
-    unsigned long long b;  // bing
-    unsigned long long f;  // feng
-
+    unsigned long long w /* wan */, t /* tiao */, b /* bing */, f /* feng */;
+    unsigned long long pw, pt, pb, pf;  // 对自己来说公开了的牌。
+    profile_datum *event;
+    unsigned char cnt;
     // 3*34/8= 13 < 4 * 8 = 32 < 34
     trial_mahjongs_in_hand() {
         this->w = this->t = this->f = this->b = __empty__;
+        this->pw = this->pt = this->pf = this->pb = __empty__;
+        this->cnt                                 = 0;
+        this->event =
+            (profile_datum *)calloc(BASIC_LIMIT, sizeof(profile_datum));
+    }
+
+    ~trial_mahjongs_in_hand() {
+        free(this->event);
+        this->event = nullptr;
     }
     trial_mahjongs_in_hand(
         unsigned long long wang,
         unsigned long long tiao,
         unsigned long long bing,
         unsigned long long feng)
-        : w(wang), t(tiao), b(bing), f(feng) {}
-    short get_cnt(unsigned long long val);
+        : w(wang), t(tiao), b(bing), f(feng) {
+        this->pw = 0x0'444'444'444 - wang;
+        this->pt = 0x0'444'444'444 - tiao;
+        this->pb = 0x0'444'444'444 - bing;
+        this->pf = 0x0'444'444'444 - feng;
+        this->event =
+            (profile_datum *)calloc(BASIC_LIMIT, sizeof(profile_datum));
+        this->cnt = 0;
+    }
+    trial_mahjongs_in_hand(
+        unsigned char *array,
+        vector<unsigned long long> (*arr)(unsigned char *) = arr_to_4_u64);
+
+    void notify(
+        mahjong_act act,
+        mahjong_attr atr,
+        mahjong_val val,
+        unsigned char caller) {
+        this->event[this->cnt++] = {act, atr, val, caller};
+    }
+
+    void transitor() {
+        for (int i = 0; i < this->cnt; i++) {
+            switch (this->event[i].atr) {
+            case WANGUAN: break;
+            case BAMBOO: break;
+            case CIRCLE: break;
+            case HANZI: break;
+            }
+        }
+    }
+
     short get_total_cnt();
     int hu_checker();
+    void add_a_card(unsigned char val /*0-33*/) {
+        unsigned char attr = val / 9;
+        unsigned char curr = val % 9;
+        unsigned long long *ptr;
+        switch (attr) {
+        case 0: ptr = &this->w; break;
+        case 1: ptr = &this->t; break;
+        case 2: ptr = &this->b; break;
+        case 3: ptr = &this->f; break;
+        default: {
+            throw "malicious payload was detected";
+        }
+        }
+        *ptr |= 1ull << (curr << 2);
+    }
 
 protected:
-    void trip_functioner(unsigned long long arr[4]);
-    void _abc_functioner(unsigned long long arr[4]);
+    // 必须要用静态成员变量。否则每次经过函数指针调用的值都不一样。
     unsigned char _13_orphans_();
     unsigned char _7_pairs_4_quadruplets();
     unsigned char _7_alone();
     unsigned char all_alone();
     unsigned char knitted_straight();
-    unsigned char normal_hu();
+    unsigned char normal_hu(unsigned char pair = 0, unsigned char seq_trip = 0);
+    int is_in_table();
+    void add_item_to_table(int res);
 };

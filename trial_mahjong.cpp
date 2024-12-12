@@ -16,15 +16,30 @@
  **/
 #include "trial_mahjong.h"
 
-#include "mahjong.h"
+trial_mahjongs_in_hand::trial_mahjongs_in_hand(
+    unsigned char *array,
+    vector<unsigned long long> (*arr)(unsigned char *)) {
+    vector<unsigned long long> tmp = arr(array);
+    this->w                        = tmp[0];
+    this->t                        = tmp[1];
+    this->b                        = tmp[2];
+    this->f                        = tmp[3];
+    this->pw                       = 0x0'444'444'444 - this->w;
+    this->pt                       = 0x0'444'444'444 - this->t;
+    this->pb                       = 0x0'444'444'444 - this->b;
+    this->pf                       = 0x0'444'444'444 - this->f;
+    this->event = (profile_datum *)calloc(BASIC_LIMIT, sizeof(profile_datum));
+    this->cnt   = 0;
+}
 
-short trial_mahjongs_in_hand::get_cnt(unsigned long long val) {
-    short res = 0, tmp = 0;
-    while (val) {
+static inline short get_cnt(unsigned long long val, unsigned char maxn = 9) {
+    short res = 0, tmp = 0, cnt = 0;
+    while (val && cnt < maxn) {
         tmp = val & 0x7;
         if (tmp >= 5) { return -1; }
         res += tmp;
         val >>= 4;
+        cnt++;
     }
     return res;
 }
@@ -35,15 +50,15 @@ short trial_mahjongs_in_hand::get_cnt(unsigned long long val) {
 short trial_mahjongs_in_hand::get_total_cnt() {
     short res    = 0;
     short tmp[4] = {
-        this->get_cnt(this->w),
-        this->get_cnt(this->t),
-        this->get_cnt(this->b),
-        this->get_cnt(this->f)};
+        get_cnt(this->w),
+        get_cnt(this->t),
+        get_cnt(this->b),
+        get_cnt(this->f, 7)};
     for (int i = 0; i < 4; i++) {
-        if (tmp[i] < 0) { return -1; }
+        if (tmp[i] < 0) { return 0; }
         res += tmp[i];
     }
-    if (res < CARDS_OF_BASIC_HU || res > MAXN_CARDS_OF_HU) { return -1; }
+    if (res < CARDS_OF_BASIC_HU || res > MAXN_CARDS_OF_HU) { return 0; }
     return res;
 }
 
@@ -61,6 +76,7 @@ unsigned char trial_mahjongs_in_hand::_13_orphans_() {
     if (tmp[3] && !is_pair(static_cast<unsigned long long>(tmp[3]))) {
         return 0;
     }
+
     for (int i = 0; i < 3; i++) {
         tmp[i] -= mask1;
         if (tmp[i] && tmp[i] != _d2v(1) && tmp[i] != _d2v(9)) { return 0; }
@@ -93,7 +109,6 @@ unsigned char trial_mahjongs_in_hand::_7_alone() {
     unsigned char note[3]     = {0};
     unsigned long long tmp[3] = {this->w, this->t, this->b};
     for (int i = 0; i < A33; i++) {
-        /// TODO: 这里不是等于，而是含有单张，且三者总数加起来为 7
         for (int j = 0; j < 3; j++) {
             note[j] = fetch_val(tmp[permute_seq[i][j]], _ofs_[0 + j], 0x3) +
                       fetch_val(tmp[permute_seq[i][j]], _ofs_[3 + j], 0x3) +
@@ -120,12 +135,11 @@ unsigned char trial_mahjongs_in_hand::all_alone() {
     for (int i = 0; i < A33; i++) {
         for (int j = 0; j < 3; j++) {
             // mask 严格是 3
-            unsigned char a =
-                fetch_val(arr[permute_seq[i][j]], _ofs_[0 + j], 0x3);
-            unsigned char b =
-                fetch_val(arr[permute_seq[i][j]], _ofs_[3 + j], 0x3);
-            unsigned char c =
-                fetch_val(arr[permute_seq[i][j]], _ofs_[6 + j], 0x3);
+            unsigned long long tmp = arr[permute_seq[i][j]];
+
+            unsigned char a = fetch_val(tmp, _ofs_[0 + j], 0x3);
+            unsigned char b = fetch_val(tmp, _ofs_[3 + j], 0x3);
+            unsigned char c = fetch_val(tmp, _ofs_[6 + j], 0x3);
             if (a > 1 || b > 1 || c > 1) { return 0; }
             if (a == 1 && b == 1 && c == 1) {
                 note[permute_seq[i][j]] = 1;
@@ -145,148 +159,245 @@ unsigned char trial_mahjongs_in_hand::knitted_straight() {
     // 挑出顺子、碰、对子。
     unsigned long long arr[4] = {this->w, this->t, this->b, this->f};
     unsigned char note[4]     = {0};
+    unsigned int *ptr         = (unsigned int *)note;
     for (int i = 0; i < A33; i++) {
+        *ptr = 0;
         for (int j = 0; j < 3; j++) {
             unsigned long long &tmp = arr[permute_seq[i][j]];
-            unsigned char a         = fetch_val(tmp, _ofs_[0 + j], 0x7);
-            unsigned char b         = fetch_val(tmp, _ofs_[3 + j], 0x7);
-            unsigned char c         = fetch_val(tmp, _ofs_[6 + j], 0x7);
-            if (a && b && c) {
-                note[permute_seq[i][j]] = 1;
-                tmp -= (1ll << _ofs_[0 + j]) | (1ll << _ofs_[3 + j]) |
-                       (1ll << _ofs_[6 + j]);
-            }
+
+            unsigned char a = fetch_val(tmp, _ofs_[0 + j], 0x7);
+            unsigned char b = fetch_val(tmp, _ofs_[3 + j], 0x7);
+            unsigned char c = fetch_val(tmp, _ofs_[6 + j], 0x7);
+            if (!(a | b | c)) { continue; }
+            note[permute_seq[i][j]] = 1;
+            tmp -= (1ll << _ofs_[0 + j]) | (1ll << _ofs_[3 + j]) |
+                   (1ll << _ofs_[6 + j]);
         }
-        if (note[0] & note[1] & note[2]) { break; }
+        if (*ptr) { break; }
     }
+    if (!*ptr) { return 0; }
 
-    if (!(note[0] & note[1] & note[2])) { return 0; }
-
-    // 1 作为 顺子或者面子，2作为对子。3作为字牌的计数器。
-    note[1] = note[2] = 0;
+    // 下标 0 对应到面子顺子或者杠，1 对应到对子。2 对应到字牌的计数器。
+    note[0] = note[1] = 0;
     for (; arr[3] && note[3] < 7; note[3]++, arr[3] >>= 4) {
         unsigned char curr = arr[3] & 0x7;
         if (!curr) { continue; }
-        if (curr == 1 || note[(curr & 1) | (curr >> 2)]) { return 0; }
+        unsigned char choice = (curr == 2);
+        if (curr == 1 || note[choice]) { return 0; }
         //  010  100 011
-        note[(curr & 1) | (curr >> 2)] = 1;
+        note[choice] = 1;
     }
 
-    if (note[2] && note[1]) { return !arr[0] && !arr[1] && !arr[2]; }
+    if (note[0] && note[1]) { return !arr[0] && !arr[1] && !arr[2]; }
     for (int i = 0; i < 3; i++) {
+#define internal_auxiliary(__a, __j)                                           \
+    do {                                                                       \
+        switch (__a) {                                                         \
+        case 1: {                                                              \
+            return 0;                                                          \
+        }                                                                      \
+        case 2: {                                                              \
+            if (note[1]) { return 0; }                                         \
+            note[1] = 1;                                                       \
+            arr[i] -= pair_mask[__j];                                          \
+            break;                                                             \
+        }                                                                      \
+        case 3:                                                                \
+        case 4: {                                                              \
+            if (note[0]) { return 0; }                                         \
+            note[0] = 1;                                                       \
+            arr[i] -= static_cast<unsigned long long>(__a) << _ofs_[__j];      \
+            break;                                                             \
+        }                                                                      \
+        }                                                                      \
+    } while (0)
         for (int j = 0; j < 7; j++) {
             unsigned char a = fetch_val(arr[i], _ofs_[j + 0], 0x7);
+            if (!a) { continue; }
             unsigned char b = fetch_val(arr[i], _ofs_[j + 1], 0x7);
             unsigned char c = fetch_val(arr[i], _ofs_[j + 2], 0x7);
-            if (!(a >= 1 && b >= 1 && c >= 1 && a <= 4 && b <= 4 && c <= 4)) {
+            if (!(a && b && c)) {
+                internal_auxiliary(a, j);
                 continue;
             }
-            if (note[1]) { return 0; }
             unsigned long long choice = seq_masks[j];
-            if (j <= 5 && a == 2) {  // 2111
-                unsigned char tmp = fetch_val(arr[i], _ofs_[j + 3], 0x7);
-                if (tmp >= 1 && tmp <= 4) { choice = seq_masks[j + 1]; }
-            }
-            note[1] = 1;
-            arr[i] -= choice;
-        }
-
-        for (int j = 0; j < 9; j++) {
-            unsigned char curr = fetch_val(arr[i], _ofs_[j], 0x7);
-            switch (curr) {
-            case 0: {
+            if (!(j <= 5 && a == 2)) {  // 2111
+                if (note[0]) { return 0; }
+                note[0] = 1;
+                arr[i] -= choice;
                 continue;
             }
-            case 2: {
-                if (note[2]) { return 0; }
-                note[2] = 1;
-                arr[i] -= pair_masks[j];
-                break;
-            }
-            case 3:
-            case 4: {
+            unsigned char tmp = fetch_val(arr[i], _ofs_[j + 3], 0x7);
+            if (tmp >= 1 && tmp <= 4) {
+                choice = seq_masks[j + 1];
                 if (note[1]) { return 0; }
                 note[1] = 1;
-                arr[i] -= (static_cast<unsigned long long>(curr) << _ofs_[j]);
-                break;
+                arr[i] -= pair_mask[j];
             }
-            default: {
-                return 0;
-            }
-            }
+            if (note[0]) { return 0; }
+            note[0] = 1;
+            arr[i] -= choice;
         }
+        unsigned char a = fetch_val(arr[i], _ofs_[7], 0x7);
+        unsigned char b = fetch_val(arr[i], _ofs_[8], 0x7);
+        internal_auxiliary(a, 7);
+        internal_auxiliary(b, 8);
+#undef internal_auxiliary
     }
-    return note[1] == note[2] && note[2] == 1;
+    return note[0] == note[1] && note[1] == 1;
 }
 
-// 抽出面子。
-void trial_mahjongs_in_hand::trip_functioner(unsigned long long arr[4]) {
-    for (int k = 0; k < 3; k++) {
-        if (!arr[k]) { continue; }
-        for (int l = 0; l < 9; l++) {
-            unsigned char curr = fetch_val(arr[k], _ofs_[l], 0x7);
-            if (curr >= 3 && curr <= 4) {
-                arr[k] -= static_cast<unsigned long long>(curr) << _ofs_[l];
-            } else {
-                continue;
-            }
-        }
+unsigned char trial_mahjongs_in_hand::normal_hu(
+    unsigned char pair,
+    unsigned char seq_trip) {
+#define remained_part(ptr, i)                                                  \
+    do {                                                                       \
+        unsigned char a = fetch_val(*ptr, _ofs_[i], 0x7);                      \
+        switch (a) {                                                           \
+        case 0: break;                                                         \
+        case 1: return 0;                                                      \
+        case 2: {                                                              \
+            *ptr -= pair_mask[i];                                              \
+            if (this->normal_hu(pair + 1, seq_trip)) {                         \
+                *ptr += pair_mask[i];                                          \
+                return 1;                                                      \
+            }                                                                  \
+            *ptr += pair_mask[i];                                              \
+            break;                                                             \
+        }                                                                      \
+        case 3: {                                                              \
+            *ptr -= trip_mask[i];                                              \
+            if (this->normal_hu(pair, seq_trip + 1)) {                         \
+                *ptr += trip_mask[i];                                          \
+                return 1;                                                      \
+            }                                                                  \
+            *ptr += trip_mask[i];                                              \
+            break;                                                             \
+        }                                                                      \
+        case 4: {                                                              \
+            *ptr -= kong_mask[i];                                              \
+            if (this->normal_hu(pair, seq_trip + 1)) {                         \
+                *ptr += kong_mask[i];                                          \
+                return 1;                                                      \
+            }                                                                  \
+            *ptr += pair_mask[i];                                              \
+            if (this->normal_hu(pair + 1, seq_trip)) {                         \
+                *ptr += pair_mask[i];                                          \
+                return 1;                                                      \
+            }                                                                  \
+            *ptr += pair_mask[i];                                              \
+            break;                                                             \
+        }                                                                      \
+        }                                                                      \
+    } while (0)
+#define loop_handler(ptr)                                                      \
+    do {                                                                       \
+        for (int i = 0; i < 7; i++) {                                          \
+            unsigned char a = fetch_val(*ptr, _ofs_[i], 0x7);                  \
+            if (!a) { continue; }                                              \
+            unsigned char b = fetch_val(*ptr, _ofs_[i + 1], 0x7);              \
+            unsigned char c = fetch_val(*ptr, _ofs_[i + 2], 0x7);              \
+            if (a >= 1 && b >= 1 && c >= 1) {                                  \
+                *ptr -= seq_masks[i];                                          \
+                if (this->normal_hu(pair, seq_trip + 1)) {                     \
+                    *ptr += seq_masks[i];                                      \
+                    return 1;                                                  \
+                }                                                              \
+                *ptr += seq_masks[i];                                          \
+            }                                                                  \
+            remained_part(ptr, i);                                             \
+        }                                                                      \
+    } while (0)
+#define one_suite(ptr)                                                         \
+    do {                                                                       \
+        loop_handler(ptr);                                                     \
+        remained_part(ptr, 7);                                                 \
+        remained_part(ptr, 8);                                                 \
+    } while (0)
+
+    if (pair > 1 || seq_trip > 4) { return 0; }
+    if (pair == 1 && seq_trip == 4) {
+        return !this->w && !this->t && !this->b && !this->f;
     }
-}
-// 抽出顺子
-void trial_mahjongs_in_hand::_abc_functioner(unsigned long long arr[4]) {
-    for (int k = 0; k < 3; k++) {
-        if (!arr[k]) { continue; }
-        for (int l = 0; l < 7;) {
-            unsigned char a = fetch_val(arr[k], _ofs_[l + 0], 0x7),
-                          b = fetch_val(arr[k], _ofs_[l + 1], 0x7),
-                          c = fetch_val(arr[k], _ofs_[l + 2], 0x7);
-            if (a >= 1 && b >= 1 && c >= 1) {
-                arr[k] -= seq_masks[l];
-                continue;
-            }
-            l++;
-        }
-    }
+    if (this->w) { one_suite(&this->w); }
+    if (this->t) { one_suite(&this->t); }
+    if (this->b) { one_suite(&this->b); }
+    for (int i = 0; i < 7; i++) { remained_part(&this->f, i); }
+
+    return !this->w && !this->t && !this->b && !this->f;
+#undef remained_part
+#undef loop_handler
+#undef one_suite
 }
 
-unsigned char trial_mahjongs_in_hand::normal_hu() {
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 9; j++) {
-            if (i == 3 && j >= 7) { break; }
-            for (int order = 0; order < 2; order++) {
-                unsigned long long arr[4] = {
-                    this->w, this->t, this->b, this->f};
-                unsigned char tmp = fetch_val(arr[i], _ofs_[j], 0x7);
-                // 抽对子。
-                if (tmp >= 2) { arr[i] -= pair_masks[j]; }
-                if (!order) {
-                    this->trip_functioner(arr);
-                    this->_abc_functioner(arr);
-                } else {
-                    this->_abc_functioner(arr);
-                    this->trip_functioner(arr);
-                }
-                if (!(arr[0] | arr[1] | arr[2] | arr[3])) { return 1; }
-            }
-        }
-    }
-    return 0;
+int trial_mahjongs_in_hand::is_in_table() {
+    this->w, this->t, this->b, this->f;
+    // 前几个等价于 5^9 内挑组件出来判断.
+    // 后一个相当于从 5^7 的范围内挑。
+    // 但是归根到底存起来总共就需要穷举 12*8 = 96 bits 的位向量。
+    return INT_MAX;
 }
+
+void trial_mahjongs_in_hand::add_item_to_table(int res) {
+    std::fstream f;
+    f.open(hu_table, std::ios::out | std::ios::app);
+    if (!f.is_open()) {
+        puts("unable to open file!");
+        return;
+    }
+    /// TODO
+    f << "\n";
+}
+
 int trial_mahjongs_in_hand::hu_checker() {
-    int cnt = this->get_total_cnt();
-    if (!cnt) { return INVALID_HU; }
-    int res = this->_13_orphans_();
-    if (res) { return _13_ORPHANS; }
+    int res = this->is_in_table();
+    if (res != INT_MAX) { return res; }
+    if (!this->get_total_cnt()) {
+        res = INVALID_HU;
+        goto terminated;
+    }
+    if (this->_13_orphans_()) {
+        res = _13_ORPHANS;
+        goto terminated;
+    }
     res = this->_7_pairs_4_quadruplets();
-    if (res) { return res; }
-    res = this->_7_alone();
-    if (res) { return _7_ALONE; }
-    res = this->all_alone();
-    if (res) { return ALL_ALONE; }
-    res = this->normal_hu();
-    if (res) { return NORMAL_HU; }
-    res = this->knitted_straight();
-    if (res) { return KNITTED_STRAIGHT; }
-    return INVALID_HU;
+    if (res) { goto terminated; }
+    if (this->_7_alone()) {
+        res = _7_ALONE;
+        goto terminated;
+    }
+    if (this->all_alone()) {
+        res = ALL_ALONE;
+        goto terminated;
+    }
+    if (this->normal_hu()) {
+        res = NORMAL_HU;
+        goto terminated;
+    }
+    if (this->knitted_straight()) {
+        res = KNITTED_STRAIGHT;
+        goto terminated;
+    }
+terminated:
+    this->add_item_to_table(res);
+    return res;
+}
+
+/// @brief
+/// @param inp 玩家手牌
+/// @param id 玩家
+/// @param arr 所有人的操作历史。
+static void evaluator(unsigned long long inp[4], unsigned char id) {
+    // clang-format off
+    short condition[4] = {
+        get_cnt(inp[0]), 
+        get_cnt(inp[1]), 
+        get_cnt(inp[2]), 
+        get_cnt(inp[3])
+    };
+    // clang-format on
+
+    unsigned char domain = 0;
+    short rec            = -1;
+    // 参考所有人的操作历史。
 }

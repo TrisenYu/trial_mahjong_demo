@@ -6,11 +6,18 @@
 
 CC:=g++
 EMCC=emcc
-EMCC_FLAG:=-s WASM=1 -o
-TEST_CASES:=tester.exe
-EMCC_OUTCOME:=test.js
 RM:=rm
+
+EMCC_FLAG:=-s WASM=1 -o
+EMCC_OUTCOME:=test.js
+
+TEST_CASES:=tester.exe
+
+DYM_FLAG:=-fpic -shared
+DYM_SO:=libmahjong.so
 SCRDIR:=
+
+
 ifeq ($(OS),Windows_NT)
 	RM=del
 	SCRDIR=$(shell echo %cd%)
@@ -26,7 +33,7 @@ Phony += clean
 Phony += help
 Phony += exam
 Phony += wasm
-
+Phony += dynamico
 # $@: 所有目标 $^ 所有依赖
 %.o: $(SCRDIR)/%.cpp
 	$(CC) -c $^ -o $@
@@ -35,8 +42,11 @@ test: $(OBJS)
 	$(CC) $^ -o $(TEST_CASES)
 wasm:
 	$(EMCC) $(SOURCE) $(EMCC_FLAG) $(EMCC_OUTCOME)
+	wasm2wat test.wasm -o test.wat
 exam:	
 	./$(TEST_CASES)
+dynamico:
+	$(CC) mahjong.cpp $(DYM_FLAG) -o $(DYM_SO)
 
 Ignore:=clean
 clean:
@@ -44,15 +54,20 @@ clean:
 	@$(RM) $(TEST_CASES)
 	$(info $(wildcard *.o))
 	@$(RM) $(wildcard *.o)
+	$(info $(DYM_SO))
+	@$(RM) $(DYM_SO)
 	$(info $(EMCC_OUTCOME))
 	@$(RM) $(EMCC_OUTCOME)
+	
 
 help:
 	$(info `test` for validating the expectation of the program)
-	$(info `help` for detailed descriptions of the usage of current makefile)
+	$(info `help` for de tailed descriptions of the usage of current makefile)
 	$(info `clean` for removing binary file)
 	$(info `exam` for executing the binary file)
 	$(info `wasm` for compiling the webassembly file)
+	$(info `dynamico` for generating libmahjong.so for experimental aim)
+
 
 .PHONY: $(Phony)
 .IGNORE: $(Ignore)

@@ -24,8 +24,6 @@ int heap_cnt = 0, game_over;
 info_of_players mamba[4];
 
 /* 判胡 */
-/// TODO: 加入分解而用于判断。
-
 /// @brief 通配符转换。这个可能还得结合距离函数做最适配计算。
 /// @todo 做了那如何恢复呢？
 /// @param arr 当前不含通配符的牌目数组。
@@ -81,9 +79,9 @@ inline static unsigned char is_diffused(
 unsigned char all_alone(
     unsigned char arr[ESSENTIAL_CARDS_TYPES],
     unsigned char cnts[6]) {
-    if (cnts[2] || cnts[3] || cnts[4] || cnts[5] != CARDS_OF_BASIC_HU) {
-        return 0;
-    }
+    unsigned int *ptr = (unsigned int *)(cnts + 2);
+    // 必须要是 00 00 00 0e
+    if (*ptr != 0x0e'00'00'00) { return 0; }
     unsigned char id[3] = {0xFF, 0xFF, 0xFF}, idx[3] = {0}, hnt = 0;
     for (int i = _1_WAN_; i <= BAI_BAN; i++) {
         if (!arr[i]) { continue; }
@@ -125,74 +123,50 @@ unsigned char knitted_straight(
     } while (0)
 
     if (cnts[5] > MAXN_CARDS_OF_HU || cnts[5] < CARDS_OF_BASIC_HU) { return 0; }
+    unsigned char tmp[ESSENTIAL_CARDS_TYPES];
+    memcpy(tmp, arr, ESSENTIAL_CARDS_TYPES);
     /* 0: pair, 1: pung/kong, 2: chow */
-    int cnt[3] = {0}, id[3] = {-1, -1, -1}, a[3];
-    int seq_suit, quadruple = 0;
-    unsigned char flag = 0, ok = 0;
+    int cnt[3] = {0}, id[3] = {-1, -1, -1}, a[3], quadruple = 0;
+    unsigned char flag = 0, nok = 0;
 
     for (int i = 0; i < A33; i++) {
         for (int j = 0; j < 3; j++) {
             a[j] = _1_WAN_ + SUIT_LEAP * permute_seq[i][j];
-            if (!column_aux(arr, a[j], j)) {
-                ok = 1;
+            if (!column_aux(tmp, a[j], j)) {
+                nok = 1;
                 break;
             }
         }
-        if (ok) {
-            ok = 0;
+        if (nok) {
+            nok = 0;
             continue;
         }
         flag = 1;
         break;
     }
     if (!flag) { return 0; }
-    for (int i = 0; i < 3; i++) { column_act(arr, a[i], i, self_sub); }
     for (int i = 0; i < 3; i++) {
+        column_act(tmp, a[i], i, self_sub);
         for (int j = 0; j < 7; j++) {
-            if (!is_a_seq(arr, a[i], j)) { continue; }
-            if (cnt[2]) { goto recover_seq; }
+            if (!is_a_seq(tmp, a[i], j)) { continue; }
+            if (cnt[2]) { return 0; }
             unsigned char choice = j;
-            if (j <= 5) {  // 只有 2111 需要(担心)另作处理。其它情况可以放心减。
-                if (arr[a[i] + j] == 2 && is_a_seq(arr, a[i], j + 1)) {
-                    choice = j + 1;
-                }
-            }
-            cnt[2]++, id[2] = choice, seq_suit = a[i];
-            seq_functor(arr + a[i] + choice, self_sub);
+            // clang-format off
+            choice += j <= 5 && tmp[a[i]+j] == 2 && is_a_seq(tmp, a[i], j+1);
+            // clang-format on
+            cnt[2]++, id[2] = choice;
+            seq_functor(tmp + a[i] + choice, self_sub);
         }
     }
-
     for (int i = _1_WAN_; i <= BAI_BAN; i++) {
-        if (!arr[i]) { continue; }
-        switch (arr[i]) {
-        case 2: {
-            if (cnt[0]) { goto recover_all; }
-            cnt[0]++, id[0] = i, arr[i] = 0;
-            break;
-        }
-        case 3:
-        case 4: {
-            if (cnt[1]) { goto recover_all; }
-            cnt[1]++, id[1] = i, arr[i] = 0;
-            quadruple = arr[i] & 4;
-            break;
-        }
-        default: {
-            continue;
-        }
-        }
+        if (tmp[i] < 2 || tmp[i] > 4) { continue; }
+        unsigned char choice = tmp[i] != 2;
+        if (cnt[choice]) { return 0; }
+        cnt[choice]++, id[choice] = i, tmp[i] = 0;
+        quadruple = choice ? (tmp[i] & 4) : quadruple;
     }
-    flag = (cnt[1] + cnt[2] == 1) && cnt[0] == 1;
+    return (cnt[1] + cnt[2] == 1) && cnt[0] == 1;
 
-    // 恢复
-recover_all:
-    if (id[0] + 1 > 0) { arr[id[0]] = 2; }
-    if (id[1] + 1 > 0) { arr[id[1]] = quadruple ? 4 : 3; }
-recover_seq:
-    if (id[2] + 1 > 0) { seq_functor(arr + seq_suit + id[2], self_add); }
-recover_columns:  // 一定有
-    for (int i = 0; i < 3; i++) { column_act(arr, a[i], i, self_add); }
-    return flag;
 #undef column_aux
 #undef column_sub
 #undef column_add
@@ -214,7 +188,7 @@ unsigned char _13_orphans_checker(
             *ptr |= func(array[i]);                                            \
         }                                                                      \
     } while (0)
-
+// 检查所有花色
 #define check_all_suits(arr, func)                                             \
     (homomorphiser(arr, _1_WAN_, func) || homomorphiser(arr, _1_TIAO, func) || \
      homomorphiser(arr, _1_TONG, func))
@@ -250,10 +224,16 @@ unsigned char _7_pairs_or_4_quadruplet(
 
 inline unsigned char check_zero_in_arr(
     unsigned char arr[ESSENTIAL_CARDS_TYPES]) {
-    for (int i = _1_WAN_; i <= BAI_BAN; i++) {
-        if (arr[i]) { return 0; }
-    }
-    return 1;
+    // 34 = 32 + 2
+    unsigned short *fin             = (unsigned short *)(arr);
+    unsigned long long *examinee[4] = {
+        (unsigned long long *)(arr + 2),
+        (unsigned long long *)(arr + 10),
+        (unsigned long long *)(arr + 18),
+        (unsigned long long *)(arr + 26)};
+    return !(
+        static_cast<unsigned long long>(*fin) | *examinee[0] | *examinee[1] |
+        *examinee[2] | *examinee[3]);
 }
 
 /// @brief 进入前已经保证有 14~17 张牌。要求判断是不是普通的胡牌牌型。
@@ -270,9 +250,7 @@ unsigned char static normal_checker(
     unsigned char seq_trip) {
 /// 检查某种花色是否判断完成。
 #define is_val_not_full_zero(array, ref)                                       \
-    (array[ref + 0] || array[ref + 1] || array[ref + 2] || array[ref + 3] ||   \
-     array[ref + 4] || array[ref + 5] || array[ref + 6] || array[ref + 7] ||   \
-     array[ref + 8])
+    (*((unsigned long long *)(array + ref)) || array[ref + 8])
 
 /// 函数内执行回溯的注入宏。后续不加下划线的参数表示不会对其对应的位置加额外处理。
 #define backtrace(arr, idx, val, par, trip)                                    \
@@ -341,8 +319,9 @@ unsigned char static normal_checker(
     for (int i = DONG_FENG; i <= BAI_BAN; i++) { /* 检查字 */
         if (!arr[i]) { continue; }
         if (arr[i] == 1) { return 0; }
-        unsigned char curr = (arr[i] == 2);
-        backtrace(arr, i, arr[i], pair + curr, seq_trip + !curr);
+        unsigned char curr = (arr[i] == 2), val = arr[i];
+        // 宏展开并不能存储先前进入的值。
+        backtrace(arr, i, val, pair + curr, seq_trip + !curr);
     }
     return check_zero_in_arr(arr);
 #undef is_val_not_full_zero
@@ -374,7 +353,7 @@ int hu_checker(unsigned char arr[ESSENTIAL_CARDS_TYPES]) {
 
     if (normal_checker(arr, 0, 0)) { return NORMAL_HU; }
     return !knitted_straight(arr, _cnts) ? INVALID_HU : KNITTED_STRAIGHT;
-end_of_process:;  // 将牌型按照函数加入到表内，以加快下一次查询。
+    // 将牌型按照函数加入到表内，以加快下一次查询。
 }
 
 /// @brief 输出单张牌是什么
@@ -396,9 +375,8 @@ void permutate_cards() {
     unsigned char cnt = 0, curr, round = 0;
     for (int i = _1_WAN_; i <= BAI_BAN; i++) { cards[i] = 4; }
     while (!(cnt == BASIC_TOTAL_CARDS)) {
-back:
         curr = uniform_gen.fetch_one() % ESSENTIAL_CARDS_TYPES;
-        if (!cards[curr]) { goto back; }
+        if (!cards[curr]) { continue; }
         q[cnt++] = curr, cards[curr]--;
     }
     for (curr = 0, cnt = 1; round < 3; cnt++) {
@@ -436,6 +414,7 @@ back:
         wprintf(KJPH_ABBR, L" ");
     }
     wprintf(KJPH_ABBR, L"\n");
+
 #endif  // DEBUG
 }
 
@@ -447,4 +426,48 @@ static inline void fetch_card_from_heap(info_of_players &participant) {
         return;
     }
     participant.curr_card = heap[heap_cnt--];
+    // 首先检查是否能使自身胡牌。
+    // 其次按照已有碰上是否形成杠、是否构成暗杠、是否构成暗刻来决策。
+    // 否则形成单牌、对子或者顺子。
+}
+
+/**
+ * 牌堆来的牌视为概率均等。
+ * 桌面上其余玩家打的牌视为利于自身向胡牌靠近的一类/手误打出去的牌。
+ * 对评估来说，最方便的写法应该是哪个接近最终的胡牌模式就往哪个靠。
+ * 也需要担心目的胡牌被中途截断的情形。
+ */
+static inline void evaluator(
+    unsigned char arr[ESSENTIAL_CARDS_TYPES],
+    unsigned char note[ESSENTIAL_CARDS_TYPES]) {
+    // 13 -[34]-> 14 -[13]-> 13.
+    // 一步以内在听牌，听牌了也不能保证能胡。
+    // 其它情况需要多步到达听牌态。
+    // 转移应当考虑玩家已掌握的所有牌面信息。
+
+    // c0 --[i0]-> c1 --[i1]-> ... --[it]-> ct --[1,13]-> ch
+    // ..476-i0    ..476-i1                 ..[475,464]
+    // 第二行意为保持原牌面不变，将从牌堆中取到的牌直接打出。
+
+    // f{i}: c{i} -> c{i+1}, 映射应该与当前的所有牌的分布有关。
+
+    // 考虑所有变化的情况。不考虑保持不变的操作。
+    // 同时也应该注意到最快到胡的好处？
+    // 总体只需要评估 1-9 如何组建，还有只能靠碰杠以及对来消耗掉的字牌。
+    // 策略上应该尽量保留一种花色，同时能占有字的占有字。
+    unsigned char val[4] = {0};
+    for (int k = 0; k < 3; k++) {
+        for (int i = _1_WAN_; i <= _9_WAN_; i++) { val[k] += arr[i + k * 9]; }
+    }
+    for (int i = DONG_FENG; i <= BAI_BAN; i++) { val[3] += arr[i]; }
+    unsigned char choice = 0, backup = 0xFF;
+    for (int i = 0; i < 4; i++) {
+        if (val[i] < backup) { backup = val[i], choice = i; }
+    }
+    // 决定出应该要刨除哪一个花色。
+    // 但是存在一种比较均衡的情况，而后续来牌都是选中抛除的花色。
+    // 比方说：4 + [3] + 3 + 3，然后一直来条
+    // 决定要丢什么颜色理应由到胡方式决定。
+
+    return;
 }

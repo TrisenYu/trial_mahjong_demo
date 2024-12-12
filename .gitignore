@@ -1,5 +1,8 @@
-MAHJONG-1.0.tar.gz
+/MAHJONG-1.0
 *.o
 *.exe
-test.js
-test.wasm
+*.so
+*.txt
+
+test.*
+

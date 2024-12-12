@@ -73,6 +73,9 @@ inline int _88_(
     同色4同顺 123 123 123 123 pp
     同色4节高 111 222 333 444 55
 */
+static int _48_(unsigned arr[ESSENTIAL_CARDS_TYPES], unsigned char cnt[6]) {
+    return 0;
+}
 
 // 32 番
 /*
